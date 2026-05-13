@@ -1,0 +1,67 @@
+# AI Radio FM — Schedule Configuration Example
+# Copy to config/schedule.yaml and customize for your station.
+#
+# Each show requires:
+#   id:          Unique identifier (used for content directory naming)
+#   name:        Display name
+#   host_id:     Must match a persona ID in personas.yaml
+#   start_time:  24-hour HH:MM (informational; scheduling logic uses the daemon)
+#   end_time:    24-hour HH:MM
+#   description: Used as the music generation prompt and show context for scripts
+
+shows:
+  - id: midnight_signal
+    name: "Midnight Signal"
+    host_id: liminal_operator
+    start_time: "00:00"
+    end_time: "04:00"
+    description: "Philosophy, memory, and the transmissions that only come through after midnight."
+
+  - id: the_night_garden
+    name: "The Night Garden"
+    host_id: nyx
+    start_time: "04:00"
+    end_time: "06:00"
+    description: "Dreams, darkness, and the things that bloom when no one is watching."
+
+  - id: dawn_chorus
+    name: "Dawn Chorus"
+    host_id: liminal_operator
+    start_time: "06:00"
+    end_time: "09:00"
+    description: "Morning reflections. The world rewrites itself at sunrise."
+
+  - id: sonic_archaeology
+    name: "Sonic Archaeology"
+    host_id: dr_resonance
+    start_time: "09:00"
+    end_time: "12:00"
+    description: "Deep cuts, lost sessions, genre genealogy, and the music they forgot to remember."
+
+  - id: signal_report
+    name: "Signal Report"
+    host_id: signal
+    start_time: "12:00"
+    end_time: "14:00"
+    description: "Current events decoded. The news behind the news, through a late-night lens."
+
+  - id: the_groove_lab
+    name: "The Groove Lab"
+    host_id: ember
+    start_time: "14:00"
+    end_time: "16:00"
+    description: "Soul, funk, and the feeling of feeling something. Music as food."
+
+  - id: crosswire
+    name: "Crosswire"
+    host_id: dr_resonance
+    start_time: "16:00"
+    end_time: "18:00"
+    description: "Two voices, one topic. Where ideas collide and sparks fly."
+
+  - id: listener_hours
+    name: "Listener Hours"
+    host_id: liminal_operator
+    start_time: "20:00"
+    end_time: "22:00"
+    description: "Your messages, your questions, your frequency. The mailbag opens."

@@ -1,0 +1,101 @@
+# Tasks
+
+- [x] 1. Define the gRPC proto for the TTS sidecar
+  - Create `go-kokoro-tts/proto/tts/tts.proto` with the `TTSService` service, `SynthesizeRequest`, and `SynthesizeResponse` messages as defined in the design
+  - `SynthesizeRequest`: `text string`, `voice_name string`, `lang_code string`, `speed float`
+  - `SynthesizeResponse`: `audio_pcm bytes` (raw little-endian float32 PCM), `sample_rate int32`
+  - Add `google.golang.org/grpc` and `google.golang.org/protobuf` to `go-kokoro-tts/go.mod`
+  - Generate Go code from the proto using `protoc` with `protoc-gen-go` and `protoc-gen-go-grpc`; commit the generated files under `go-kokoro-tts/proto/tts/`
+  - References: Requirement 4
+  - [x] 1.1 Write `go-kokoro-tts/proto/tts/tts.proto`
+  - [x] 1.2 Add gRPC and protobuf dependencies to `go-kokoro-tts/go.mod` and run `go mod tidy`
+  - [x] 1.3 Generate Go bindings (`tts.pb.go`, `tts_grpc.pb.go`) and commit them under `go-kokoro-tts/proto/tts/`
+
+- [x] 2. Implement the TTS sidecar binary in `go-kokoro-tts`
+  - Create `go-kokoro-tts/cmd/tts-server/main.go` implementing the `TTSServiceServer` interface
+  - Flags: `--addr` (default `:50051`), `--lib`, `--model`, `--voice-dir`, `--coreml`, `--cuda` — matching the existing `kokoro` CLI conventions
+  - Startup: init `model.ONNXEngine`, `api.Pipeline` (normalizer + phonemizer + tokenizer), `voice.BinaryVoiceLoader`, `text.Chunker(500)`
+  - `Synthesize` RPC: chunk text → load voice profile → call `pipeline.Synthesize` per chunk → concatenate `[]float32` → encode as little-endian bytes → return in `SynthesizeResponse`
+  - Shutdown: block on SIGINT/SIGTERM, call `engine.Close()`
+  - References: Requirement 4
+  - [x] 2.1 Write `go-kokoro-tts/cmd/tts-server/main.go` with flag parsing, engine init, and gRPC server startup
+  - [x] 2.2 Implement the `Synthesize` RPC handler with chunking, voice loading, inference, and PCM encoding
+  - [x] 2.3 Add graceful shutdown on SIGINT/SIGTERM with `engine.Close()`
+  - [x] 2.4 Verify `go build ./cmd/tts-server/...` compiles cleanly in `go-kokoro-tts`
+
+- [x] 3. Add `TTSGRPCAddr` to `RuntimeConfig` in `ai-radio-fm`
+  - Add `TTSGRPCAddr string` field to `config.RuntimeConfig` in `config/env.go`
+  - Read from `TTS_GRPC_ADDR` env var with default `""` (empty string means use local ONNX path)
+  - Add test coverage for the new field in `config/env_test.go`
+  - References: Requirement 4, Requirement 7
+  - [x] 3.1 Add `TTSGRPCAddr` field to `RuntimeConfig` and wire it in `LoadEnv()`
+  - [x] 3.2 Add `TTS_GRPC_ADDR` test cases to `TestLoadEnv_Defaults` and `TestLoadEnv_Overrides`
+
+- [x] 4. Implement `GRPCTTSRenderer` in `ai-radio-fm`
+  - Create `generator/grpc_tts.go` implementing the `TTSRenderer` interface
+  - `NewGRPCTTSRenderer(addr string) (*GRPCTTSRenderer, error)` — dials the gRPC server with a 5-second connection timeout; returns error if dial fails
+  - `Render(ctx context.Context, text, voiceName, outputPath string) error` — sends `SynthesizeRequest` with a 120-second deadline, decodes `audio_pcm` bytes to `[]float32`, calls `audio.WriteWAV(outputPath, samples, 24000)`
+  - `Close() error` — closes the gRPC connection
+  - Add `google.golang.org/grpc` and the generated proto package to `ai-radio-fm/go.mod`; use a `replace` directive pointing to the local `go-kokoro-tts` proto package
+  - References: Requirement 4
+  - [x] 4.1 Add gRPC client dependency to `ai-radio-fm/go.mod` and run `go mod tidy`
+  - [x] 4.2 Write `generator/grpc_tts.go` with `GRPCTTSRenderer` struct, constructor, `Render`, and `Close`
+  - [x] 4.3 Write `generator/grpc_tts_test.go` using `google.golang.org/grpc/test/bufconn` to run an in-process gRPC server; assert that `Render` writes a valid WAV file given known PCM bytes returned by the mock server
+  - [x] 4.4 Run `go test ./generator/...` and confirm all tests pass
+
+- [x] 5. Add `StationPaths` helper to the config package
+  - Create `config/station.go` with `StationPaths` struct and `StationPathsFor(name string) StationPaths`
+  - Fields: `Name`, `Dir` (`stations/<name>/`), `ScheduleFile`, `PersonasFile`, `ContentDir`, `ArchiveDir`, `LedgerPath`
+  - All paths are relative to the current working directory
+  - References: Requirement 1, Requirement 7
+  - [x] 5.1 Write `config/station.go` with `StationPaths` struct and `StationPathsFor`
+  - [x] 5.2 Write `config/station_test.go` with table-driven tests covering names with hyphens, underscores, and plain names; assert all derived paths are correct
+
+- [x] 6. Add `--station` flag to `cmd/start.go`
+  - Add `--station <name>` flag to `startCmd`
+  - When `--station` is set: validate `stations/<name>/` exists (fatal if not); call `StationPathsFor(name)`; override `cfg.ContentDir`, `cfg.ArchiveDir`, `cfg.LedgerPath` with station paths unless those env vars are explicitly set; default `cfg.IcecastMount` to `<name>` unless `ICECAST_MOUNT` is set; load schedule from `paths.ScheduleFile` and personas from `paths.PersonasFile`
+  - When `--station` is not set: existing behaviour unchanged
+  - Replace the local Kokoro init block with the two-path decision: if `cfg.TTSGRPCAddr != ""` use `NewGRPCTTSRenderer`; otherwise use existing local ONNX path
+  - References: Requirement 1, Requirement 4, Requirement 7
+  - [x] 6.1 Add `--station` string flag to `startCmd` and the directory existence check
+  - [x] 6.2 Wire `StationPathsFor` into path and mount resolution when `--station` is set
+  - [x] 6.3 Replace the TTS init block with the two-path decision (gRPC vs local ONNX)
+  - [x] 6.4 Run `go build ./...` and `go test ./...` to confirm no regressions
+
+- [x] 7. Create the example station directory
+  - Create `stations/example_station/schedule.yaml` — copy from `config/schedule.yaml.example`
+  - Create `stations/example_station/personas.yaml` — copy from `config/personas.yaml.example`
+  - Create `stations/example_station/.env.example` documenting all per-station env vars: `API_ADDR`, `ICECAST_MOUNT`, `ICECAST_HOST`, `ICECAST_PORT`, `ICECAST_USER`, `ICECAST_PASSWORD`, `TTS_GRPC_ADDR`, `MUSICGEN_URL`, `ANTHROPIC_API_KEY`
+  - Create `stations/.env.shared.example` documenting shared env vars with comments
+  - References: Requirement 8
+  - [x] 7.1 Write `stations/example_station/schedule.yaml`
+  - [x] 7.2 Write `stations/example_station/personas.yaml`
+  - [x] 7.3 Write `stations/example_station/.env.example` with all per-station vars documented
+  - [x] 7.4 Write `stations/.env.shared.example` with shared vars documented
+
+- [x] 8. Write the `stations.sh` orchestration script
+  - Create `stations.sh` at the repo root
+  - Station discovery: scan `stations/*/schedule.yaml` to find all configured stations
+  - Environment loading: source `stations/.env.shared` if present, then `stations/<name>/.env` per station
+  - Port/mount conflict detection: collect all `API_ADDR` and `ICECAST_MOUNT` values; if any duplicates exist print the conflicting station names and exit 1
+  - `start`: start `tts-server` binary first (write PID to `stations/tts-server.pid`, log to `stations/tts-server.log`); then start each station with `airadio start --station <name>` (write PID to `stations/<name>/station.pid`, log to `stations/<name>/station.log`)
+  - `stop`: read each PID file, send SIGTERM, wait up to 5 seconds for exit
+  - `status`: for each PID file check if process is alive; print running/stopped with PID
+  - `restart <name>`: stop that station only, then start it again
+  - `logs <name>`: `tail -f stations/<name>/station.log`
+  - References: Requirement 6
+  - [x] 8.1 Write the station discovery and env loading logic
+  - [x] 8.2 Write the conflict detection logic for mount points and API ports
+  - [x] 8.3 Write the `start` command including TTS sidecar startup
+  - [x] 8.4 Write the `stop`, `status`, `restart`, and `logs` commands
+  - [x] 8.5 Make `stations.sh` executable (`chmod +x`)
+
+- [x] 9. Verify full build and test suite passes
+  - Run `go build ./...` in both `ai-radio-fm` and `go-kokoro-tts`
+  - Run `go test ./...` in `ai-radio-fm` and confirm all existing and new tests pass
+  - Manually verify `stations.sh` conflict detection by creating two stations with the same `API_ADDR` and asserting exit code 1
+  - References: All requirements
+  - [x] 9.1 Run `go build ./...` in `go-kokoro-tts` and resolve any errors
+  - [x] 9.2 Run `go build ./...` in `ai-radio-fm` and resolve any errors
+  - [x] 9.3 Run `go test ./...` in `ai-radio-fm` and confirm all tests pass
+  - [x] 9.4 Test `stations.sh` conflict detection with fixture `.env` files
