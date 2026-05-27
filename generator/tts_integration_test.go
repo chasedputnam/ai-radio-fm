@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/user/go-kokoro-tts/pkg/model"
+	"github.com/chasedputnam/go-kokoro-tts/pkg/model"
 )
 
 func TestKokoroTTSIntegration(t *testing.T) {

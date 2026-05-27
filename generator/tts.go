@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/user/go-kokoro-tts/pkg/api"
-	"github.com/user/go-kokoro-tts/pkg/audio"
-	"github.com/user/go-kokoro-tts/pkg/model"
-	"github.com/user/go-kokoro-tts/pkg/text"
-	"github.com/user/go-kokoro-tts/pkg/voice"
+	"github.com/chasedputnam/go-kokoro-tts/pkg/api"
+	"github.com/chasedputnam/go-kokoro-tts/pkg/audio"
+	"github.com/chasedputnam/go-kokoro-tts/pkg/model"
+	"github.com/chasedputnam/go-kokoro-tts/pkg/text"
+	"github.com/chasedputnam/go-kokoro-tts/pkg/voice"
 )
 
 // maxChunkSize matches the safe limit used by the go-kokoro-tts CLI (~510 tokens).

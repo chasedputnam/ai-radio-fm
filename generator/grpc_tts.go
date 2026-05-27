@@ -7,11 +7,11 @@ import (
 	"math"
 	"time"
 
-	ttspb "github.com/user/go-kokoro-tts/proto/tts"
+	ttspb "github.com/chasedputnam/go-kokoro-tts/proto/tts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/user/go-kokoro-tts/pkg/audio"
+	"github.com/chasedputnam/go-kokoro-tts/pkg/audio"
 )
 
 // GRPCTTSRenderer implements TTSRenderer by calling the tts-server gRPC sidecar.

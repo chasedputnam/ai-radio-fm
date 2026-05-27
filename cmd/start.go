@@ -18,7 +18,7 @@ import (
 	"github.com/chaseputnam/ai-radio-fm/operator"
 	"github.com/chaseputnam/ai-radio-fm/streamer"
 	"github.com/spf13/cobra"
-	"github.com/user/go-kokoro-tts/pkg/model"
+	"github.com/chasedputnam/go-kokoro-tts/pkg/model"
 )
 
 var stationName string

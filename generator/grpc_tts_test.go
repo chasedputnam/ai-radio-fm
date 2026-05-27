@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	ttspb "github.com/user/go-kokoro-tts/proto/tts"
+	ttspb "github.com/chasedputnam/go-kokoro-tts/proto/tts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
