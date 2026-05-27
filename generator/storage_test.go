@@ -47,7 +47,7 @@ func TestCountAudioFiles_MixedFiles(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create audio files
-	for _, name := range []string{"a.wav", "b.wav", "c.ogg"} {
+	for _, name := range []string{"a.wav", "b.wav", "c.ogg", "d.flac"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte{}, 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -67,7 +67,7 @@ func TestCountAudioFiles_MixedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 3 {
-		t.Errorf("expected 3 audio files, got %d", count)
+	if count != 4 {
+		t.Errorf("expected 4 audio files, got %d", count)
 	}
 }

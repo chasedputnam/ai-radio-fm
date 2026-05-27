@@ -144,10 +144,10 @@ var startCmd = &cobra.Command{
 
 		// --- Step 10: Init generator clients ---
 		anthropic := generator.NewAnthropicClientWithBaseURL(cfg.AnthropicAPIKey, cfg.AnthropicBaseURL)
-		musicClient := generator.NewMusicGenClient(cfg.MusicGenURL)
+		musicClient := generator.NewMusicGenClient(cfg.MusicGenURL, cfg.MusicGenFormat)
 
 		// --- Step 11: Init ContentManager ---
-		cm := generator.NewContentManager(anthropic, tts, musicClient, l, playlist, personas, cfg.ContentDir)
+		cm := generator.NewContentManager(anthropic, tts, musicClient, l, playlist, personas, cfg.ContentDir, cfg.MusicGenDuration)
 
 		// --- Step 12: Init stream monitor and daemon ---
 		ctx, cancel := context.WithCancel(context.Background())

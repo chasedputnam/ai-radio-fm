@@ -75,6 +75,11 @@ var generateTalkCmd = &cobra.Command{
 	},
 }
 
+var (
+	musicDuration    float64
+	musicDescription string
+)
+
 var generateMusicCmd = &cobra.Command{
 	Use:   "music",
 	Short: "Generate music tracks",
@@ -83,26 +88,43 @@ var generateMusicCmd = &cobra.Command{
 
 		cfg := config.LoadEnv()
 
-		schedule, err := config.LoadSchedule("config/schedule.yaml")
+		// Resolve description: flag > schedule description > default.
+		prompt := musicDescription
+		if prompt == "" {
+			schedule, err := config.LoadSchedule("config/schedule.yaml")
+			if err == nil && len(schedule.Shows) > 0 && schedule.Shows[0].Description != "" {
+				prompt = schedule.Shows[0].Description
+			}
+		}
+		if prompt == "" {
+			prompt = "ambient electronic music"
+		}
+
+		// Resolve duration: flag > env default.
+		duration := musicDuration
+		if duration <= 0 {
+			duration = cfg.MusicGenDuration
+		}
+
+		client := generator.NewMusicGenClient(cfg.MusicGenURL, cfg.MusicGenFormat)
+
+		// Use a temp dir to hold the generated file.
+		tmpDir, err := os.MkdirTemp("", "airadio-music-*")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading schedule: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Failed to create temp dir: %v\n", err)
 			os.Exit(1)
 		}
 
-		prompt := "chill wave"
-		if len(schedule.Shows) > 0 && schedule.Shows[0].Description != "" {
-			prompt = schedule.Shows[0].Description
-		}
+		fmt.Printf("Generating: %q (%.0fs)\n", prompt, duration)
 
-		client := generator.NewMusicGenClient(cfg.MusicGenURL)
-
-		_, err = client.RequestGeneration(context.Background(), prompt)
+		filePath, err := client.Generate(context.Background(), prompt, tmpDir, duration)
 		if err != nil {
+			os.RemoveAll(tmpDir)
 			fmt.Fprintf(os.Stderr, "Music generation failed: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Println("Music generation requested successfully.")
+		fmt.Printf("Music generated successfully: %s\n", filePath)
 	},
 }
 
@@ -110,4 +132,9 @@ func init() {
 	rootCmd.AddCommand(generateCmd)
 	generateCmd.AddCommand(generateTalkCmd)
 	generateCmd.AddCommand(generateMusicCmd)
+
+	generateMusicCmd.Flags().Float64VarP(&musicDuration, "duration", "d", 0,
+		"Track duration in seconds (default: MUSICGEN_DURATION env var, fallback 90)")
+	generateMusicCmd.Flags().StringVarP(&musicDescription, "description", "D", "",
+		"Music style/genre description (default: first show's description from schedule.yaml)")
 }

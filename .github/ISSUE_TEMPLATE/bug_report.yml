@@ -1,0 +1,94 @@
+name: 🐛 Bug Report
+description: Something isn't working? Report it here
+title: "BUG: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out as much detail as possible.
+
+  - type: input
+    id: version
+    attributes:
+      label: ai-radio-fm Version
+      description: Which version or commit are you using?
+      placeholder: "e.g. v1.0.0 or commit sha"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (amd64)
+        - Linux (arm64)
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe what you were doing and what went wrong.
+      placeholder: "Example: I ran ./airadio start --station my_station and the stream dropped after 10 minutes..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal command or config to reproduce the issue.
+      placeholder: |
+        1. Run: ./airadio start --station my_station
+        2. Wait ~10 minutes
+        3. See error: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output / logs
+      description: Paste the full terminal output or error message.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: go-version
+    attributes:
+      label: Go version
+      placeholder: "e.g. go1.24.2"
+    validations:
+      required: false
+
+  - type: input
+    id: icecast-version
+    attributes:
+      label: Icecast version
+      placeholder: "e.g. Icecast 2.4.4"
+    validations:
+      required: false
+
+  - type: input
+    id: espeak-version
+    attributes:
+      label: espeak-ng version
+      placeholder: "e.g. espeak-ng 1.51"
+    validations:
+      required: false

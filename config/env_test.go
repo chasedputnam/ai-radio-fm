@@ -9,7 +9,7 @@ func TestLoadEnv_Defaults(t *testing.T) {
 	vars := []string{
 		"ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ICECAST_HOST", "ICECAST_PORT", "ICECAST_MOUNT",
 		"ICECAST_USER", "ICECAST_PASSWORD", "CONTENT_DIR", "KOKORO_LIB_PATH",
-		"KOKORO_MODEL_PATH", "KOKORO_VOICE_DIR", "MUSICGEN_URL", "ARCHIVE_DIR",
+		"KOKORO_MODEL_PATH", "KOKORO_VOICE_DIR", "MUSICGEN_URL", "MUSICGEN_FORMAT", "ARCHIVE_DIR",
 		"LEDGER_PATH", "API_ADDR",
 	}
 	for _, v := range vars {
@@ -33,7 +33,8 @@ func TestLoadEnv_Defaults(t *testing.T) {
 		{"KokoroLibPath", cfg.KokoroLibPath, "/opt/homebrew/lib/libonnxruntime.dylib"},
 		{"KokoroModelPath", cfg.KokoroModelPath, "./go-kokoro-tts/kokoro-v0_19.onnx"},
 		{"KokoroVoiceDir", cfg.KokoroVoiceDir, "./go-kokoro-tts/voices"},
-		{"MusicGenURL", cfg.MusicGenURL, "http://localhost:8002"},
+		{"MusicGenURL", cfg.MusicGenURL, "http://localhost:4009"},
+		{"MusicGenFormat", cfg.MusicGenFormat, "flac"},
 		{"TTSGRPCAddr", cfg.TTSGRPCAddr, ""},
 		{"ArchiveDir", cfg.ArchiveDir, "./archive"},
 		{"LedgerPath", cfg.LedgerPath, "./ledger.jsonl"},
@@ -63,6 +64,7 @@ func TestLoadEnv_Overrides(t *testing.T) {
 	t.Setenv("KOKORO_MODEL_PATH", "/models/kokoro.onnx")
 	t.Setenv("KOKORO_VOICE_DIR", "/models/voices")
 	t.Setenv("MUSICGEN_URL", "http://musicgen:9000")
+	t.Setenv("MUSICGEN_FORMAT", "mp3")
 	t.Setenv("TTS_GRPC_ADDR", "localhost:50051")
 	t.Setenv("ARCHIVE_DIR", "/data/archive")
 	t.Setenv("LEDGER_PATH", "/data/ledger.jsonl")
@@ -105,6 +107,9 @@ func TestLoadEnv_Overrides(t *testing.T) {
 	}
 	if cfg.MusicGenURL != "http://musicgen:9000" {
 		t.Errorf("MusicGenURL: got %q", cfg.MusicGenURL)
+	}
+	if cfg.MusicGenFormat != "mp3" {
+		t.Errorf("MusicGenFormat: got %q, want mp3", cfg.MusicGenFormat)
 	}
 	if cfg.TTSGRPCAddr != "localhost:50051" {
 		t.Errorf("TTSGRPCAddr: got %q", cfg.TTSGRPCAddr)

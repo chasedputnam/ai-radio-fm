@@ -21,6 +21,8 @@ type RuntimeConfig struct {
 	KokoroVoiceDir     string
 	KokoroCoreML       bool
 	MusicGenURL        string
+	MusicGenFormat     string
+	MusicGenDuration   float64
 	TTSGRPCAddr        string
 	ArchiveDir         string
 	LedgerPath         string
@@ -44,7 +46,9 @@ func LoadEnv() RuntimeConfig {
 		KokoroModelPath:    getEnv("KOKORO_MODEL_PATH", "./go-kokoro-tts/kokoro-v0_19.onnx"),
 		KokoroVoiceDir:     getEnv("KOKORO_VOICE_DIR", "./go-kokoro-tts/voices"),
 		KokoroCoreML:       getEnvBool("KOKORO_COREML", true),
-		MusicGenURL:        getEnv("MUSICGEN_URL", "http://localhost:8002"),
+		MusicGenURL:        getEnv("MUSICGEN_URL", "http://localhost:4009"),
+		MusicGenFormat:     getEnv("MUSICGEN_FORMAT", "flac"),
+		MusicGenDuration:   getEnvFloat("MUSICGEN_DURATION", 90),
 		TTSGRPCAddr:        getEnv("TTS_GRPC_ADDR", ""),
 		ArchiveDir:         getEnv("ARCHIVE_DIR", "./archive"),
 		LedgerPath:         getEnv("LEDGER_PATH", "./ledger.jsonl"),
@@ -72,6 +76,18 @@ func getEnvInt(key string, defaultVal int) int {
 		return defaultVal
 	}
 	return n
+}
+
+func getEnvFloat(key string, defaultVal float64) float64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return defaultVal
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return defaultVal
+	}
+	return f
 }
 
 // getEnvBool returns the boolean value of an environment variable.

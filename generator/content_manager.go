@@ -19,6 +19,11 @@ type scriptGenerator interface {
 	GenerateScript(ctx context.Context, systemPrompt, userPrompt string) (string, error)
 }
 
+// musicGenerator is the interface satisfied by *MusicGenClient and test mocks.
+type musicGenerator interface {
+	Generate(ctx context.Context, caption, outputDir string, duration float64) (string, error)
+}
+
 // TTSRenderer is the interface satisfied by *KokoroTTS and test mocks.
 type TTSRenderer interface {
 	Render(ctx context.Context, text, voiceName, outputPath string) error
@@ -28,36 +33,37 @@ type TTSRenderer interface {
 // Anthropic script generator, Kokoro TTS renderer, MusicGen client, ledger,
 // and playlist into a single content production pipeline.
 type ContentManager struct {
-	scriptGen  scriptGenerator
-	tts        TTSRenderer // nil when Kokoro paths are unavailable
-	music      *MusicGenClient
-	ledger     *ledger.Ledger
-	playlist   *streamer.Playlist
-	personas   *config.PersonasConfig
-	contentDir string
-	builder    *PromptBuilder
+	scriptGen       scriptGenerator
+	tts             TTSRenderer
+	music           musicGenerator
+	ledger          *ledger.Ledger
+	playlist        *streamer.Playlist
+	personas        *config.PersonasConfig
+	contentDir      string
+	builder         *PromptBuilder
+	musicDuration   float64 // requested track length in seconds; 0 = server default
 }
 
-// NewContentManager creates a fully wired ContentManager.
-// tts may be nil; in that case talk generation skips audio rendering.
 func NewContentManager(
 	anthropic *AnthropicClient,
 	tts TTSRenderer,
-	music *MusicGenClient,
+	music musicGenerator,
 	l *ledger.Ledger,
 	playlist *streamer.Playlist,
 	personas *config.PersonasConfig,
 	contentDir string,
+	musicDuration float64,
 ) *ContentManager {
 	return &ContentManager{
-		scriptGen:  anthropic,
-		tts:        tts,
-		music:      music,
-		ledger:     l,
-		playlist:   playlist,
-		personas:   personas,
-		contentDir: contentDir,
-		builder:    &PromptBuilder{},
+		scriptGen:     anthropic,
+		tts:           tts,
+		music:         music,
+		ledger:        l,
+		playlist:      playlist,
+		personas:      personas,
+		contentDir:    contentDir,
+		builder:       &PromptBuilder{},
+		musicDuration: musicDuration,
 	}
 }
 
@@ -138,32 +144,19 @@ func (cm *ContentManager) GenerateTalk(ctx context.Context, show *config.Show) e
 	return nil
 }
 
-// GenerateMusic requests a music track from the MusicGen server, waits for
-// completion, downloads the file, and enqueues it onto the playlist.
+// GenerateMusic requests a music track from the go-music-gen server,
+// saves it to the show's music directory, and enqueues it onto the playlist.
 func (cm *ContentManager) GenerateMusic(ctx context.Context, show *config.Show) error {
 	prompt := show.Description
 	if prompt == "" {
 		prompt = "ambient electronic music"
 	}
 
-	taskID, err := cm.music.RequestGeneration(ctx, prompt)
-	if err != nil {
-		return fmt.Errorf("GenerateMusic: request failed: %w", err)
-	}
-
-	audioURL, err := cm.music.WaitForCompletion(ctx, taskID)
-	if err != nil {
-		return fmt.Errorf("GenerateMusic: wait failed: %w", err)
-	}
-
 	musicDir := MusicDir(cm.contentDir, show.ID)
-	if err := os.MkdirAll(musicDir, 0755); err != nil {
-		return fmt.Errorf("GenerateMusic: failed to create music dir: %w", err)
-	}
 
-	filePath, err := cm.music.DownloadTrack(ctx, audioURL, musicDir)
+	filePath, err := cm.music.Generate(ctx, prompt, musicDir, cm.musicDuration)
 	if err != nil {
-		return fmt.Errorf("GenerateMusic: download failed: %w", err)
+		return fmt.Errorf("GenerateMusic: %w", err)
 	}
 
 	cm.playlist.Enqueue(streamer.PlaylistItem{

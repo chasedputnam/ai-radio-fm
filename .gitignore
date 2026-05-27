@@ -1,0 +1,52 @@
+# Binaries
+airadio
+ai-radio-fm
+*.exe
+
+# Audio files (large, not tracked)
+*.ogg
+*.wav
+*.mp3
+*.flac
+
+# Build output
+build/
+dist/
+
+# Station runtime files
+stations/*/content/
+stations/*/archive/
+stations/*/ledger.jsonl
+stations/*/station.pid
+stations/*/station.log
+stations/.env.shared
+stations/tts-server.pid
+stations/tts-server.log
+
+# Single-station runtime
+content/
+archive/
+ledger.jsonl
+
+# Environment
+.env
+.env.*
+!.env.example
+!stations/.env.shared.example
+!stations/example_station/.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+specs/
+
+# macOS
+.DS_Store
+
+# Go
+vendor/
+
+# antigravity CLI
+.antigravitycli/

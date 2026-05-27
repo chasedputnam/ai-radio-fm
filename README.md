@@ -6,7 +6,7 @@ A 24/7 AI-powered music-forward internet radio station written in Go. AI generat
 
 AI Radio FM is the Golang-based successor to `writ-fm`. It provides a seamless, single-binary architecture that orchestrates:
 - **Audio Streaming:** Native Ogg Vorbis streaming to an Icecast server with seamless playlist queueing and stream archival capabilities.
-- **Content Generation:** Integrates with Anthropic's Claude API for script writing, Kokoro TTS for voice rendering, and `music-gen.server` for AI music generation.
+- **Content Generation:** Integrates with Anthropic's Claude API for script writing, Kokoro TTS for voice rendering, and [go-music-gen](https://github.com/kortexa-ai/go-music-gen) for AI music generation.
 - **Autonomous Operation:** An internal background loop ensures content buffers are always stocked and system health is maintained.
 - **API Access:** Exposes real-time station status and scheduling data.
 - **Multi-Station:** Run up to five independent stations on one machine, each with its own schedule, personas, and Icecast mount point, managed by a single orchestration script.
@@ -38,7 +38,7 @@ AI Radio FM is the Golang-based successor to `writ-fm`. It provides a seamless, 
 │                                                                 │
 │  Shared Services                                                │
 │  ├── Icecast :8000  (/station_a, /station_b, /station_c, ...)  │
-│  ├── MusicGen Server :8002                                      │
+│  ├── MusicGen Server :4009  (go-music-gen)                                      │
 │  └── tts-server (gRPC) :50051                                   │
 │                                                                 │
 │  Station Processes (one per airadio binary)                     │
@@ -60,6 +60,27 @@ Each station is a fully independent OS process with its own config, content, arc
 - **ONNX Runtime**: Required for TTS. `brew install onnxruntime` or download from [onnxruntime releases](https://github.com/microsoft/onnxruntime/releases)
 - **Anthropic API key**: Set as `ANTHROPIC_API_KEY`
 - **go-kokoro-tts**: Clone alongside this repo — `git clone https://github.com/user/go-kokoro-tts.git ../go-kokoro-tts`
+- **go-music-gen**: Required for music generation. Clone and set up separately:
+
+  ```bash
+  git clone https://github.com/kortexa-ai/go-music-gen.git ~/repo/go-music-gen
+  cd ~/repo/go-music-gen
+
+  # Download ACE-Step model checkpoints (one-time setup, requires the Python music-gen.server repo)
+  cd ~/repo/music-gen.server && ./setup.sh
+
+  # Build the Go server binary
+  cd ~/repo/go-music-gen
+  go build -o go-music-gen ./cmd/server/
+  ```
+
+  Start it before running `airadio start`:
+
+  ```bash
+  cd ~/repo/go-music-gen && ./run.sh
+  ```
+
+  The server listens on `http://localhost:4009` by default. If MusicGen is not running, the station operates in talk-only mode — music generation errors are logged and the daemon continues.
 
 ---
 
@@ -103,7 +124,9 @@ Full list of variables with defaults:
 | `ICECAST_MOUNT` | `stream` | Icecast mount point |
 | `ICECAST_USER` | `source` | Icecast source username |
 | `ICECAST_PASSWORD` | `hackme` | Icecast source password |
-| `MUSICGEN_URL` | `http://localhost:8002` | MusicGen server URL |
+| `MUSICGEN_URL` | `http://localhost:4009` | [go-music-gen](https://github.com/kortexa-ai/go-music-gen) server URL |
+| `MUSICGEN_FORMAT` | `flac` | Audio format requested from go-music-gen (`flac`, `mp3`, `wav`, `opus`, `aac`) |
+| `MUSICGEN_DURATION` | `90` | Default track length in seconds requested from go-music-gen |
 | `TTS_GRPC_ADDR` | _(empty)_ | gRPC TTS sidecar address. If set, uses sidecar instead of local ONNX |
 | `KOKORO_LIB_PATH` | `/opt/homebrew/lib/libonnxruntime.dylib` | ONNX runtime shared library |
 | `KOKORO_MODEL_PATH` | `./go-kokoro-tts/kokoro-v0_19.onnx` | Kokoro ONNX model |
@@ -133,7 +156,7 @@ On a fresh station with no pre-generated content, there will be a brief silence 
 2. The operator daemon ticks immediately (no waiting for the 15-minute interval).
 3. It checks inventory — zero files found.
 4. It calls the Anthropic API to generate a talk script, then renders it to a WAV file via the TTS sidecar (or local ONNX engine). This typically takes 30–90 seconds depending on script length and hardware.
-5. It calls the MusicGen server to request a music track, polls until complete, and downloads the result. This typically takes 1–3 minutes depending on the MusicGen server queue.
+5. It calls the go-music-gen server to generate a music track synchronously. Generation typically takes 1–3 minutes on CPU (ACE-Step diffusion model). The resulting audio file is written directly to disk — no polling or download step required.
 6. Both files are enqueued on the playlist. Audio begins streaming to Icecast as soon as the first file is ready.
 7. The daemon continues ticking every 15 minutes, generating more content whenever inventory drops below `INVENTORY_THRESHOLD` (default: 5).
 
@@ -184,7 +207,7 @@ ICECAST_PORT=8000
 ICECAST_USER=source
 ICECAST_PASSWORD=your_password
 TTS_GRPC_ADDR=localhost:50051
-MUSICGEN_URL=http://localhost:8002
+MUSICGEN_URL=http://localhost:4009
 KOKORO_LIB_PATH=/opt/homebrew/lib/libonnxruntime.dylib
 KOKORO_MODEL_PATH=./go-kokoro-tts/kokoro-v0_19.onnx
 KOKORO_VOICE_DIR=./go-kokoro-tts/voices
@@ -269,8 +292,12 @@ stations/
 # Generate a talk segment manually
 ./airadio generate talk
 
-# Request a music track manually
+# Generate a music track manually (uses schedule description and MUSICGEN_DURATION by default)
 ./airadio generate music
+
+# Generate with explicit description and duration
+./airadio generate music --description "dark jazz, upright bass, brushed drums, noir" --duration 120
+./airadio generate music -D "lo-fi hip hop, warm vinyl crackle" -d 90
 ```
 
 ---

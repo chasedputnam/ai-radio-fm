@@ -15,7 +15,7 @@ func MusicDir(contentDir, showID string) string {
 	return filepath.Join(contentDir, "music", showID)
 }
 
-// CountAudioFiles returns the number of .wav and .ogg files in dir.
+// CountAudioFiles returns the number of .wav, .ogg, and .flac files in dir.
 // Returns 0, nil if the directory does not exist.
 func CountAudioFiles(dir string) (int, error) {
 	entries, err := os.ReadDir(dir)
@@ -32,7 +32,7 @@ func CountAudioFiles(dir string) (int, error) {
 			continue
 		}
 		ext := filepath.Ext(e.Name())
-		if ext == ".wav" || ext == ".ogg" {
+		if ext == ".wav" || ext == ".ogg" || ext == ".flac" {
 			count++
 		}
 	}

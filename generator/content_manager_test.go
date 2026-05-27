@@ -2,10 +2,7 @@ package generator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -40,12 +37,34 @@ func (m *mockTTSRenderer) Render(ctx context.Context, text, voiceName, outputPat
 	return os.WriteFile(outputPath, []byte("RIFF"), 0644)
 }
 
+// mockMusicGenerator implements musicGenerator for tests.
+type mockMusicGenerator struct {
+	err      error
+	filePath string // path to write a dummy file at
+}
+
+func (m *mockMusicGenerator) Generate(ctx context.Context, caption, outputDir string, duration float64) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	// Write a dummy file so the playlist item has a real path.
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", err
+	}
+	p := filepath.Join(outputDir, "mock.flac")
+	if err := os.WriteFile(p, []byte("fLaC"), 0644); err != nil {
+		return "", err
+	}
+	m.filePath = p
+	return p, nil
+}
+
 // newTestContentManager builds a ContentManager wired to test doubles.
 func newTestContentManager(
 	t *testing.T,
 	anthropic *mockAnthropicClient,
 	tts TTSRenderer,
-	musicBaseURL string,
+	music musicGenerator,
 ) (*ContentManager, *streamer.Playlist, *ledger.Ledger, string) {
 	t.Helper()
 	contentDir := t.TempDir()
@@ -63,21 +82,16 @@ func newTestContentManager(
 		},
 	}
 
-	var musicClient *MusicGenClient
-	if musicBaseURL != "" {
-		musicClient = NewMusicGenClient(musicBaseURL)
-		musicClient.PollInterval = 1 // 1 nanosecond — effectively immediate in tests
-	}
-
 	cm := &ContentManager{
-		scriptGen:  anthropic,
-		tts:        tts,
-		music:      musicClient,
-		ledger:     l,
-		playlist:   pl,
-		personas:   personas,
-		contentDir: contentDir,
-		builder:    &PromptBuilder{},
+		scriptGen:     anthropic,
+		tts:           tts,
+		music:         music,
+		ledger:        l,
+		playlist:      pl,
+		personas:      personas,
+		contentDir:    contentDir,
+		builder:       &PromptBuilder{},
+		musicDuration: 0, // use server default in tests
 	}
 
 	return cm, pl, l, contentDir
@@ -90,7 +104,7 @@ func TestContentManager_GenerateTalk_Success(t *testing.T) {
 	ant := &mockAnthropicClient{script: script}
 	tts := &mockTTSRenderer{}
 
-	cm, pl, l, contentDir := newTestContentManager(t, ant, tts, "")
+	cm, pl, l, contentDir := newTestContentManager(t, ant, tts, nil)
 
 	show := &config.Show{ID: "midnight_signal", HostID: "host1", Name: "Midnight Signal"}
 	err := cm.GenerateTalk(context.Background(), show)
@@ -139,7 +153,7 @@ func TestContentManager_GenerateTalk_Success(t *testing.T) {
 
 func TestContentManager_GenerateTalk_PersonaNotFound(t *testing.T) {
 	ant := &mockAnthropicClient{script: "hello"}
-	cm, _, _, _ := newTestContentManager(t, ant, &mockTTSRenderer{}, "")
+	cm, _, _, _ := newTestContentManager(t, ant, &mockTTSRenderer{}, nil)
 
 	show := &config.Show{ID: "show1", HostID: "nonexistent_host"}
 	err := cm.GenerateTalk(context.Background(), show)
@@ -150,7 +164,7 @@ func TestContentManager_GenerateTalk_PersonaNotFound(t *testing.T) {
 
 func TestContentManager_GenerateTalk_AnthropicError(t *testing.T) {
 	ant := &mockAnthropicClient{err: fmt.Errorf("api error")}
-	cm, _, _, _ := newTestContentManager(t, ant, &mockTTSRenderer{}, "")
+	cm, _, _, _ := newTestContentManager(t, ant, &mockTTSRenderer{}, nil)
 
 	show := &config.Show{ID: "show1", HostID: "host1"}
 	err := cm.GenerateTalk(context.Background(), show)
@@ -161,7 +175,7 @@ func TestContentManager_GenerateTalk_AnthropicError(t *testing.T) {
 
 func TestContentManager_GenerateTalk_NilTTS(t *testing.T) {
 	ant := &mockAnthropicClient{script: "hello world"}
-	cm, _, l, _ := newTestContentManager(t, ant, nil, "")
+	cm, _, l, _ := newTestContentManager(t, ant, nil, nil)
 
 	show := &config.Show{ID: "show1", HostID: "host1", Name: "Show 1"}
 	err := cm.GenerateTalk(context.Background(), show)
@@ -177,26 +191,9 @@ func TestContentManager_GenerateTalk_NilTTS(t *testing.T) {
 }
 
 func TestContentManager_GenerateMusic_Success(t *testing.T) {
-	// Spin up a mock MusicGen HTTP server.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/api/generate":
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(GenerateMusicResponse{TaskID: "task-123"})
-		case r.Method == http.MethodGet && r.URL.Path == "/api/tasks/task-123":
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(TaskStatusResponse{Status: "completed", AudioURL: "/audio/track.ogg"})
-		case r.Method == http.MethodGet && r.URL.Path == "/audio/track.ogg":
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OggS")) // minimal ogg-like content
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-
+	mockMusic := &mockMusicGenerator{}
 	ant := &mockAnthropicClient{}
-	cm, _, _, contentDir := newTestContentManager(t, ant, nil, srv.URL)
+	cm, _, _, contentDir := newTestContentManager(t, ant, nil, mockMusic)
 
 	show := &config.Show{ID: "midnight_signal", HostID: "host1", Description: "ambient music"}
 	err := cm.GenerateMusic(context.Background(), show)
@@ -204,17 +201,20 @@ func TestContentManager_GenerateMusic_Success(t *testing.T) {
 		t.Fatalf("GenerateMusic failed: %v", err)
 	}
 
-	// Assert file was downloaded into the music dir.
+	// Assert file was written into the music dir.
 	musicDir := MusicDir(contentDir, show.ID)
 	entries, _ := os.ReadDir(musicDir)
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 file in music dir, got %d", len(entries))
 	}
+	if entries[0].Name() != "mock.flac" {
+		t.Errorf("expected mock.flac, got %s", entries[0].Name())
+	}
 }
 
 func TestContentManager_InventoryLevel(t *testing.T) {
 	ant := &mockAnthropicClient{}
-	cm, _, _, contentDir := newTestContentManager(t, ant, nil, "")
+	cm, _, _, contentDir := newTestContentManager(t, ant, nil, nil)
 
 	showID := "test_show"
 
